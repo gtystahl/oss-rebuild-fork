@@ -7,6 +7,7 @@ import (
 	"archive/zip"
 	"context"
 	"io"
+	"slices"
 	"sort"
 	"time"
 
@@ -44,6 +45,73 @@ func BlobHashesFromZip(zr *zip.Reader) (files []plumbing.Hash, err error) {
 		files = append(files, h.Sum())
 	}
 	return files, nil
+}
+
+type commitWithCount struct {
+	hash  string
+	count int
+}
+
+type LazyTreeAll struct{}
+
+func (c LazyTreeAll) Search(ctx context.Context, r *git.Repository, hashes []string) (closest []string, matched, total int, err error) {
+	files := make(map[plumbing.Hash]bool)
+	for _, h := range hashes {
+		_, err = r.BlobObject(plumbing.NewHash(h))
+		if err == plumbing.ErrObjectNotFound {
+			// Skip files not present in repo.
+			err = nil
+		} else if err != nil {
+			return
+		} else {
+			files[plumbing.NewHash(h)] = true
+		}
+	}
+	total = len(files)
+	if total == 0 {
+		err = errors.New("repo contains no matching files")
+		return
+	}
+	// Construct cache of all trees and their match count.
+	cache := make(map[plumbing.Hash]int)
+	ti, _ := r.TreeObjects()
+	ti.ForEach(func(t *object.Tree) error {
+		countTree(t, files, cache)
+		return nil
+	})
+
+	// Search through all commits for the one whose tree has the most matches.
+	var allCommits []commitWithCount
+	ci, _ := r.CommitObjects()
+	err = ci.ForEach(func(c *object.Commit) error {
+		count := cache[c.TreeHash]
+		allCommits = append(allCommits, commitWithCount{
+			hash:  c.Hash.String(),
+			count: count,
+		})
+		if count > matched {
+			matched = count
+		}
+		if count > 0 && total > 0 {
+			if count > total {
+				total = count
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return
+	}
+	// Sort commits by count (descending)
+	slices.SortFunc(allCommits, func(a, b commitWithCount) int {
+		return b.count - a.count // descending order
+	})
+	// Extract just the hashes
+	closest = make([]string, 0, len(allCommits))
+	for _, cc := range allCommits {
+		closest = append(closest, cc.hash)
+	}
+	return
 }
 
 // LazyTreeCount searches all TreeObjects in the repository for the number of matches against the input files provided.
