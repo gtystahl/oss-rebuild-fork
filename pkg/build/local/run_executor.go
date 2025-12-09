@@ -201,6 +201,8 @@ func (e *DockerRunExecutor) executeBuild(ctx context.Context, handle *localHandl
 	if !e.retainContainer {
 		runArgs = append(runArgs, "--rm")
 	}
+	// TODO - Make this a configurable change
+	runArgs = append(runArgs, "--memory", "1g")
 	runArgs = append(runArgs, "--name", handle.id) // Use BuildID as container name
 	runArgs = append(runArgs, "-v", fmt.Sprintf("%s:%s", hostOutputPath, path.Dir(plan.OutputPath)))
 	if plan.WorkingDir != "" {
