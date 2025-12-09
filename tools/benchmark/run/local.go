@@ -7,12 +7,12 @@ import (
 	"bytes"
 	"context"
 	"crypto"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
 
-	"github.com/go-git/go-billy/v5/memfs"
-	"github.com/go-git/go-git/v5/storage/memory"
 	"github.com/google/oss-rebuild/internal/cache"
 	"github.com/google/oss-rebuild/internal/gitx"
 	"github.com/google/oss-rebuild/internal/httpx"
@@ -101,7 +101,19 @@ func (s *localExecutionService) infer(ctx context.Context, t rebuild.Target, mux
 	if err != nil {
 		return nil, err
 	}
-	rcfg, err := rebuilder.CloneRepo(ctx, t, repo, &gitx.RepositoryOptions{Worktree: memfs.New(), Storer: memory.NewStorage()})
+	bfs := NewLimitedMemoryFilesystem(DefaultMemoryLimit)
+	rcfg, err := rebuilder.CloneRepo(ctx, t, repo, &gitx.RepositoryOptions{Worktree: bfs, Storer: NewLimitedStorage(DefaultObjectLimit)})
+	if lfs, ok := bfs.(*limitedMemoryFS); ok {
+		csize := lfs.GetCurrentSize()
+		log.Printf("\n\n\n-----\nRepository Size: %v\n-----\n\n\n", csize)
+		// Write it to a static log file too
+		if logFile, err := os.OpenFile("/home/shared/UploadedPackageReproducibility/trialOut/repo_size.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+			defer logFile.Close()
+			logFile.WriteString(
+				fmt.Sprintf("Repository Size for %s %s %s: %v\n", t.Ecosystem, t.Package, t.Version, csize),
+			)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
