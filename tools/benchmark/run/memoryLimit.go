@@ -12,7 +12,7 @@ import (
 	"github.com/go-git/go-git/v5/storage/memory"
 )
 
-// Set it to 4gb
+// Set it to 2gb
 var DefaultMemoryLimit int64 = 2 * 1024 * 1024 * 1024
 
 // For testing
