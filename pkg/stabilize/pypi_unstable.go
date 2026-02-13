@@ -60,7 +60,7 @@ type MetadataDistInfo struct {
 var UnstablePypiStabilizers = []Stabilizer{
 	StableVersionFile2,
 	StableVersionFile,
-	StableCommentsCollapse
+	StableCommentsCollapse,
 	StableCrlf,
 	StablePypiRecord,
 }
